@@ -208,7 +208,10 @@ func (r *TeamResource) Create(ctx context.Context, req resource.CreateRequest, r
 		ManageCollection: plan.ManageCollection.ValueBool(),
 		PlanJob:          plan.PlanJob.ValueBool(),
 		ApproveJob:       plan.ApproveJob.ValueBool(),
-		Role:             plan.Role.ValueString(),
+	}
+
+	if !plan.Role.IsUnknown() && !plan.Role.IsNull() {
+		bodyRequest.Role = plan.Role.ValueString()
 	}
 
 	var out = new(bytes.Buffer)
