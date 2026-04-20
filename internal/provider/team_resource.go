@@ -325,10 +325,10 @@ func (r *TeamResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	state.ManageCollection = types.BoolValue(team.ManageCollection)
 	state.PlanJob = types.BoolValue(team.PlanJob)
 	state.ApproveJob = types.BoolValue(team.ApproveJob)
-	if team.Role == "" {
+	if team.Role == nil || *team.Role == "" {
 		state.Role = types.StringNull()
 	} else {
-		state.Role = types.StringValue(team.Role)
+		state.Role = types.StringValue(*team.Role)
 	}
 
 	// Set refreshed state
