@@ -211,7 +211,8 @@ func (r *TeamResource) Create(ctx context.Context, req resource.CreateRequest, r
 	}
 
 	if !plan.Role.IsUnknown() && !plan.Role.IsNull() {
-		bodyRequest.Role = plan.Role.ValueString()
+		role := plan.Role.ValueString()
+		bodyRequest.Role = &role
 	}
 
 	var out = new(bytes.Buffer)
