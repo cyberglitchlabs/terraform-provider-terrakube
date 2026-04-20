@@ -263,7 +263,7 @@ func (r *TeamResource) Create(ctx context.Context, req resource.CreateRequest, r
 	plan.ManageCollection = types.BoolValue(newTeam.ManageCollection)
 	plan.PlanJob = types.BoolValue(newTeam.PlanJob)
 	plan.ApproveJob = types.BoolValue(newTeam.ApproveJob)
-	plan.Role = types.StringValue(newTeam.Role)
+	plan.Role = types.StringPointerValue(newTeam.Role)
 
 	tflog.Info(ctx, "Team Resource Created", map[string]any{"success": true})
 
