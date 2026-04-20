@@ -362,9 +362,13 @@ func (r *TeamResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		ManageCollection: plan.ManageCollection.ValueBool(),
 		PlanJob:          plan.PlanJob.ValueBool(),
 		ApproveJob:       plan.ApproveJob.ValueBool(),
-		Role:             plan.Role.ValueString(),
 		ID:               state.ID.ValueString(),
 		Name:             state.Name.ValueString(),
+	}
+
+	if !plan.Role.IsNull() && !plan.Role.IsUnknown() {
+		role := plan.Role.ValueString()
+		bodyRequest.Role = &role
 	}
 
 	var out = new(bytes.Buffer)
