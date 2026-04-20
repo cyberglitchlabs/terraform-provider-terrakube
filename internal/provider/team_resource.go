@@ -441,7 +441,7 @@ func (r *TeamResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	plan.ManageCollection = types.BoolValue(team.ManageCollection)
 	plan.PlanJob = types.BoolValue(team.PlanJob)
 	plan.ApproveJob = types.BoolValue(team.ApproveJob)
-	plan.Role = types.StringValue(team.Role)
+	plan.Role = types.StringPointerValue(team.Role)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
