@@ -147,7 +147,7 @@ func (r *TeamResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 				Computed:    true,
 				Description: "Predefined role: admin, write, plan, read, or custom. When set, overrides individual boolean flags.",
 				Validators: []validator.String{
-					stringvalidator.OneOf("admin", "write", "plan", "read", "custom", ""),
+					stringvalidator.OneOf("admin", "write", "plan", "read", "custom"),
 				},
 			},
 		},
