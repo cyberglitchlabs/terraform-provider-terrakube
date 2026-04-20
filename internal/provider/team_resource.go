@@ -11,9 +11,11 @@ import (
 	"terraform-provider-terrakube/internal/client"
 
 	"github.com/google/jsonapi"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -44,6 +46,9 @@ type TeamResourceModel struct {
 	ManageTemplate   types.Bool   `tfsdk:"manage_template"`
 	ManageJob        types.Bool   `tfsdk:"manage_job"`
 	ManageCollection types.Bool   `tfsdk:"manage_collection"`
+	PlanJob          types.Bool   `tfsdk:"plan_job"`
+	ApproveJob       types.Bool   `tfsdk:"approve_job"`
+	Role             types.String `tfsdk:"role"`
 }
 
 func NewTeamResource() resource.Resource {
@@ -125,6 +130,26 @@ func (r *TeamResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 				Computed:    true,
 				Default:     booldefault.StaticBool(false),
 			},
+			"plan_job": schema.BoolAttribute{
+				Optional:    true,
+				Description: "Allow queuing plans (RBAC v2). Defaults to false.",
+				Computed:    true,
+				Default:     booldefault.StaticBool(false),
+			},
+			"approve_job": schema.BoolAttribute{
+				Optional:    true,
+				Description: "Allow approving/applying runs (RBAC v2). Defaults to false.",
+				Computed:    true,
+				Default:     booldefault.StaticBool(false),
+			},
+			"role": schema.StringAttribute{
+				Optional:    true,
+				Computed:    true,
+				Description: "Predefined role: admin, write, plan, read, or custom. When set, overrides individual boolean flags.",
+				Validators: []validator.String{
+					stringvalidator.OneOf("admin", "write", "plan", "read", "custom", ""),
+				},
+			},
 		},
 	}
 }
@@ -181,6 +206,9 @@ func (r *TeamResource) Create(ctx context.Context, req resource.CreateRequest, r
 		ManageVcs:        plan.ManageVcs.ValueBool(),
 		ManageJob:        plan.ManageJob.ValueBool(),
 		ManageCollection: plan.ManageCollection.ValueBool(),
+		PlanJob:          plan.PlanJob.ValueBool(),
+		ApproveJob:       plan.ApproveJob.ValueBool(),
+		Role:             plan.Role.ValueString(),
 	}
 
 	var out = new(bytes.Buffer)
@@ -230,6 +258,9 @@ func (r *TeamResource) Create(ctx context.Context, req resource.CreateRequest, r
 	plan.ManageTemplate = types.BoolValue(newTeam.ManageTemplate)
 	plan.ManageJob = types.BoolValue(newTeam.ManageJob)
 	plan.ManageCollection = types.BoolValue(newTeam.ManageCollection)
+	plan.PlanJob = types.BoolValue(newTeam.PlanJob)
+	plan.ApproveJob = types.BoolValue(newTeam.ApproveJob)
+	plan.Role = types.StringValue(newTeam.Role)
 
 	tflog.Info(ctx, "Team Resource Created", map[string]any{"success": true})
 
@@ -289,6 +320,9 @@ func (r *TeamResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	state.ManageTemplate = types.BoolValue(team.ManageTemplate)
 	state.ManageJob = types.BoolValue(team.ManageJob)
 	state.ManageCollection = types.BoolValue(team.ManageCollection)
+	state.PlanJob = types.BoolValue(team.PlanJob)
+	state.ApproveJob = types.BoolValue(team.ApproveJob)
+	state.Role = types.StringValue(team.Role)
 
 	// Set refreshed state
 	diags = resp.State.Set(ctx, &state)
@@ -319,6 +353,9 @@ func (r *TeamResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		ManageVcs:        plan.ManageVcs.ValueBool(),
 		ManageJob:        plan.ManageJob.ValueBool(),
 		ManageCollection: plan.ManageCollection.ValueBool(),
+		PlanJob:          plan.PlanJob.ValueBool(),
+		ApproveJob:       plan.ApproveJob.ValueBool(),
+		Role:             plan.Role.ValueString(),
 		ID:               state.ID.ValueString(),
 		Name:             state.Name.ValueString(),
 	}
@@ -391,6 +428,9 @@ func (r *TeamResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	plan.ManageTemplate = types.BoolValue(team.ManageTemplate)
 	plan.ManageJob = types.BoolValue(team.ManageJob)
 	plan.ManageCollection = types.BoolValue(team.ManageCollection)
+	plan.PlanJob = types.BoolValue(team.PlanJob)
+	plan.ApproveJob = types.BoolValue(team.ApproveJob)
+	plan.Role = types.StringValue(team.Role)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
