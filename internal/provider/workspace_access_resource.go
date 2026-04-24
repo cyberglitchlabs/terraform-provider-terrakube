@@ -169,21 +169,12 @@ func (r *WorkspaceAccessResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 
-	planJobVal := plan.ManageJob.ValueBool()
-	if !plan.PlanJob.IsNull() && !plan.PlanJob.IsUnknown() {
-		planJobVal = plan.PlanJob.ValueBool()
-	}
-	approveJobVal := plan.ManageJob.ValueBool()
-	if !plan.ApproveJob.IsNull() && !plan.ApproveJob.IsUnknown() {
-		approveJobVal = plan.ApproveJob.ValueBool()
-	}
-
 	bodyRequest := &client.WorkspaceAccessEntity{
 		ManageState:     plan.ManageState.ValueBool(),
 		ManageWorkspace: plan.ManageWorkspace.ValueBool(),
 		ManageJob:       plan.ManageJob.ValueBool(),
-		PlanJob:         planJobVal,
-		ApproveJob:      approveJobVal,
+		PlanJob:         resolveJobFlag(plan.PlanJob, plan.ManageJob),
+		ApproveJob:      resolveJobFlag(plan.ApproveJob, plan.ManageJob),
 		Name:            plan.Name.ValueString(),
 	}
 
@@ -324,21 +315,12 @@ func (r *WorkspaceAccessResource) Update(ctx context.Context, req resource.Updat
 		return
 	}
 
-	planJobVal := plan.ManageJob.ValueBool()
-	if !plan.PlanJob.IsNull() && !plan.PlanJob.IsUnknown() {
-		planJobVal = plan.PlanJob.ValueBool()
-	}
-	approveJobVal := plan.ManageJob.ValueBool()
-	if !plan.ApproveJob.IsNull() && !plan.ApproveJob.IsUnknown() {
-		approveJobVal = plan.ApproveJob.ValueBool()
-	}
-
 	bodyRequest := &client.WorkspaceAccessEntity{
 		ManageState:     plan.ManageState.ValueBool(),
 		ManageWorkspace: plan.ManageWorkspace.ValueBool(),
 		ManageJob:       plan.ManageJob.ValueBool(),
-		PlanJob:         planJobVal,
-		ApproveJob:      approveJobVal,
+		PlanJob:         resolveJobFlag(plan.PlanJob, plan.ManageJob),
+		ApproveJob:      resolveJobFlag(plan.ApproveJob, plan.ManageJob),
 		Name:            plan.Name.ValueString(),
 		ID:              state.ID.ValueString(),
 	}

@@ -33,6 +33,15 @@ func roleToState(r *string) types.String {
 	return types.StringValue(*r)
 }
 
+// resolveJobFlag returns the explicit value when set; otherwise inherits from
+// the fallback (used to inherit plan_job/approve_job from manage_job).
+func resolveJobFlag(explicit, inherit types.Bool) bool {
+	if !explicit.IsNull() && !explicit.IsUnknown() {
+		return explicit.ValueBool()
+	}
+	return inherit.ValueBool()
+}
+
 // rbacRoleConflictValidator warns when plan_job or approve_job are explicitly
 // set alongside a non-custom role. For non-custom roles the server ignores
 // boolean flags, so setting them produces a confusing config.

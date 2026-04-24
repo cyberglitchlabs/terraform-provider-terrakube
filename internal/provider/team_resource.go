@@ -199,15 +199,6 @@ func (r *TeamResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 
-	planJobVal := plan.ManageJob.ValueBool()
-	if !plan.PlanJob.IsNull() && !plan.PlanJob.IsUnknown() {
-		planJobVal = plan.PlanJob.ValueBool()
-	}
-	approveJobVal := plan.ManageJob.ValueBool()
-	if !plan.ApproveJob.IsNull() && !plan.ApproveJob.IsUnknown() {
-		approveJobVal = plan.ApproveJob.ValueBool()
-	}
-
 	bodyRequest := &client.TeamEntity{
 		Name:             plan.Name.ValueString(),
 		ManageState:      plan.ManageState.ValueBool(),
@@ -218,8 +209,8 @@ func (r *TeamResource) Create(ctx context.Context, req resource.CreateRequest, r
 		ManageVcs:        plan.ManageVcs.ValueBool(),
 		ManageJob:        plan.ManageJob.ValueBool(),
 		ManageCollection: plan.ManageCollection.ValueBool(),
-		PlanJob:          planJobVal,
-		ApproveJob:       approveJobVal,
+		PlanJob:          resolveJobFlag(plan.PlanJob, plan.ManageJob),
+		ApproveJob:       resolveJobFlag(plan.ApproveJob, plan.ManageJob),
 	}
 
 	if !plan.Role.IsUnknown() && !plan.Role.IsNull() {
@@ -371,15 +362,6 @@ func (r *TeamResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		return
 	}
 
-	planJobVal := plan.ManageJob.ValueBool()
-	if !plan.PlanJob.IsNull() && !plan.PlanJob.IsUnknown() {
-		planJobVal = plan.PlanJob.ValueBool()
-	}
-	approveJobVal := plan.ManageJob.ValueBool()
-	if !plan.ApproveJob.IsNull() && !plan.ApproveJob.IsUnknown() {
-		approveJobVal = plan.ApproveJob.ValueBool()
-	}
-
 	bodyRequest := &client.TeamEntity{
 		ManageState:      plan.ManageState.ValueBool(),
 		ManageWorkspace:  plan.ManageWorkspace.ValueBool(),
@@ -389,8 +371,8 @@ func (r *TeamResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		ManageVcs:        plan.ManageVcs.ValueBool(),
 		ManageJob:        plan.ManageJob.ValueBool(),
 		ManageCollection: plan.ManageCollection.ValueBool(),
-		PlanJob:          planJobVal,
-		ApproveJob:       approveJobVal,
+		PlanJob:          resolveJobFlag(plan.PlanJob, plan.ManageJob),
+		ApproveJob:       resolveJobFlag(plan.ApproveJob, plan.ManageJob),
 		ID:               state.ID.ValueString(),
 		Name:             state.Name.ValueString(),
 	}
