@@ -24,6 +24,15 @@ type AtomicOperationResponse struct {
 	} `json:"atomic:results"`
 }
 
+// roleToState converts a nullable API role string to a Terraform string value.
+// nil or empty string becomes null — both represent "unset/custom" on the server.
+func roleToState(r *string) types.String {
+	if r == nil || *r == "" {
+		return types.StringNull()
+	}
+	return types.StringValue(*r)
+}
+
 // rbacRoleConflictValidator warns when plan_job or approve_job are explicitly
 // set alongside a non-custom role. For non-custom roles the server ignores
 // boolean flags, so setting them produces a confusing config.

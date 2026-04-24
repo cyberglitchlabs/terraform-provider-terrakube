@@ -21,6 +21,9 @@ resource "terrakube_workspace_access" "workspace_access" {
   manage_job       = true
   manage_state     = false
   manage_workspace = false
+  plan_job         = true   # RBAC v2: required for "New Run" button
+  approve_job      = true   # RBAC v2: required for apply approval
+  role             = "custom" # "custom" defers to boolean flags
 }
 ```
 
@@ -35,9 +38,12 @@ resource "terrakube_workspace_access" "workspace_access" {
 
 ### Optional
 
+- `approve_job` (Boolean) Allow approving/applying runs (RBAC v2). Inherits manage_job when not set. Only used when role is unset or "custom".
 - `manage_job` (Boolean) Allow to manage and trigger jobs
 - `manage_state` (Boolean) Allow to manage Terraform/OpenTofu state
 - `manage_workspace` (Boolean) Allow to manage workspaces
+- `plan_job` (Boolean) Allow queuing plans (RBAC v2). Inherits manage_job when not set. Only used when role is unset or "custom".
+- `role` (String) Predefined role: admin (all), write (plan+apply+workspace+state), plan (plan only), read (read only), custom (use boolean flags). Leave unset to use boolean flags.
 
 ### Read-Only
 

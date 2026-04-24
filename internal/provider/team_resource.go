@@ -515,13 +515,6 @@ func (r *TeamResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 	}
 }
 
-func roleToState(r *string) types.String {
-	if r == nil || *r == "" {
-		return types.StringNull()
-	}
-	return types.StringValue(*r)
-}
-
 func (r *TeamResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	idParts := strings.Split(req.ID, ",")
 
