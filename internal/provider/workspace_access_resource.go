@@ -95,7 +95,7 @@ func (r *WorkspaceAccessResource) Schema(ctx context.Context, req resource.Schem
 			},
 			"manage_job": schema.BoolAttribute{
 				Optional:    true,
-				Description: "Allow to manage and trigger jobs",
+				Description: "Allow to manage and trigger jobs. In RBAC v2 this is derived from plan_job/approve_job — set those fields directly.",
 				Computed:    true,
 				Default:     booldefault.StaticBool(false),
 			},

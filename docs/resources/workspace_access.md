@@ -39,7 +39,7 @@ resource "terrakube_workspace_access" "workspace_access" {
 ### Optional
 
 - `approve_job` (Boolean) Allow approving/applying runs (RBAC v2). Inherits manage_job when not set. Only used when role is unset or "custom".
-- `manage_job` (Boolean) Allow to manage and trigger jobs
+- `manage_job` (Boolean) Allow to manage and trigger jobs. In RBAC v2 this is derived from plan_job/approve_job — set those fields directly.
 - `manage_state` (Boolean) Allow to manage Terraform/OpenTofu state
 - `manage_workspace` (Boolean) Allow to manage workspaces
 - `plan_job` (Boolean) Allow queuing plans (RBAC v2). Inherits manage_job when not set. Only used when role is unset or "custom".

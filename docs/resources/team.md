@@ -42,7 +42,7 @@ resource "terrakube_team" "team" {
 
 - `approve_job` (Boolean) Allow approving/applying runs (RBAC v2). Inherits manage_job when not set. Only used when role is unset or "custom".
 - `manage_collection` (Boolean) Allow to manage variables collection
-- `manage_job` (Boolean) Allow to manage and trigger jobs
+- `manage_job` (Boolean) Allow to manage and trigger jobs. In RBAC v2 this is derived from plan_job/approve_job — set those fields directly.
 - `manage_module` (Boolean) Allow to manage modules
 - `manage_provider` (Boolean) Allow to manage providers
 - `manage_state` (Boolean) Allow to manage Terraform/OpenTofu state
