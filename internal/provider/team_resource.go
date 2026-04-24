@@ -132,15 +132,13 @@ func (r *TeamResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 			},
 			"plan_job": schema.BoolAttribute{
 				Optional:    true,
-				Description: "Allow queuing plans (RBAC v2). Defaults to false.",
+				Description: "Allow queuing plans (RBAC v2). Inherits manage_job when not set.",
 				Computed:    true,
-				Default:     booldefault.StaticBool(false),
 			},
 			"approve_job": schema.BoolAttribute{
 				Optional:    true,
-				Description: "Allow approving/applying runs (RBAC v2). Defaults to false.",
+				Description: "Allow approving/applying runs (RBAC v2). Inherits manage_job when not set.",
 				Computed:    true,
-				Default:     booldefault.StaticBool(false),
 			},
 			"role": schema.StringAttribute{
 				Optional:    true,
@@ -196,6 +194,15 @@ func (r *TeamResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 
+	planJobVal := plan.ManageJob.ValueBool()
+	if !plan.PlanJob.IsNull() && !plan.PlanJob.IsUnknown() {
+		planJobVal = plan.PlanJob.ValueBool()
+	}
+	approveJobVal := plan.ManageJob.ValueBool()
+	if !plan.ApproveJob.IsNull() && !plan.ApproveJob.IsUnknown() {
+		approveJobVal = plan.ApproveJob.ValueBool()
+	}
+
 	bodyRequest := &client.TeamEntity{
 		Name:             plan.Name.ValueString(),
 		ManageState:      plan.ManageState.ValueBool(),
@@ -206,8 +213,8 @@ func (r *TeamResource) Create(ctx context.Context, req resource.CreateRequest, r
 		ManageVcs:        plan.ManageVcs.ValueBool(),
 		ManageJob:        plan.ManageJob.ValueBool(),
 		ManageCollection: plan.ManageCollection.ValueBool(),
-		PlanJob:          plan.PlanJob.ValueBool(),
-		ApproveJob:       plan.ApproveJob.ValueBool(),
+		PlanJob:          planJobVal,
+		ApproveJob:       approveJobVal,
 	}
 
 	if !plan.Role.IsUnknown() && !plan.Role.IsNull() {
@@ -241,6 +248,12 @@ func (r *TeamResource) Create(ctx context.Context, req resource.CreateRequest, r
 	if err != nil {
 		tflog.Error(ctx, "Error reading team resource response")
 	}
+
+	if teamResponse.StatusCode >= 400 {
+		resp.Diagnostics.AddError("Error creating team", fmt.Sprintf("status: %v, body: %v", teamResponse.Status, string(bodyResponse)))
+		return
+	}
+
 	newTeam := &client.TeamEntity{}
 
 	err = jsonapi.UnmarshalPayload(strings.NewReader(string(bodyResponse)), newTeam)
@@ -264,7 +277,7 @@ func (r *TeamResource) Create(ctx context.Context, req resource.CreateRequest, r
 	plan.ManageCollection = types.BoolValue(newTeam.ManageCollection)
 	plan.PlanJob = types.BoolValue(newTeam.PlanJob)
 	plan.ApproveJob = types.BoolValue(newTeam.ApproveJob)
-	plan.Role = types.StringPointerValue(newTeam.Role)
+	plan.Role = roleToState(newTeam.Role)
 
 	tflog.Info(ctx, "Team Resource Created", map[string]any{"success": true})
 
@@ -305,7 +318,6 @@ func (r *TeamResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	}
 	team := &client.TeamEntity{}
 
-	tflog.Info(ctx, "Body Response", map[string]any{"bodyResponse": string(bodyResponse)})
 	err = jsonapi.UnmarshalPayload(strings.NewReader(string(bodyResponse)), team)
 
 	if err != nil {
@@ -326,11 +338,7 @@ func (r *TeamResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	state.ManageCollection = types.BoolValue(team.ManageCollection)
 	state.PlanJob = types.BoolValue(team.PlanJob)
 	state.ApproveJob = types.BoolValue(team.ApproveJob)
-	if team.Role == nil || *team.Role == "" {
-		state.Role = types.StringNull()
-	} else {
-		state.Role = types.StringValue(*team.Role)
-	}
+	state.Role = roleToState(team.Role)
 
 	// Set refreshed state
 	diags = resp.State.Set(ctx, &state)
@@ -352,6 +360,15 @@ func (r *TeamResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		return
 	}
 
+	planJobVal := plan.ManageJob.ValueBool()
+	if !plan.PlanJob.IsNull() && !plan.PlanJob.IsUnknown() {
+		planJobVal = plan.PlanJob.ValueBool()
+	}
+	approveJobVal := plan.ManageJob.ValueBool()
+	if !plan.ApproveJob.IsNull() && !plan.ApproveJob.IsUnknown() {
+		approveJobVal = plan.ApproveJob.ValueBool()
+	}
+
 	bodyRequest := &client.TeamEntity{
 		ManageState:      plan.ManageState.ValueBool(),
 		ManageWorkspace:  plan.ManageWorkspace.ValueBool(),
@@ -361,8 +378,8 @@ func (r *TeamResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		ManageVcs:        plan.ManageVcs.ValueBool(),
 		ManageJob:        plan.ManageJob.ValueBool(),
 		ManageCollection: plan.ManageCollection.ValueBool(),
-		PlanJob:          plan.PlanJob.ValueBool(),
-		ApproveJob:       plan.ApproveJob.ValueBool(),
+		PlanJob:          planJobVal,
+		ApproveJob:       approveJobVal,
 		ID:               state.ID.ValueString(),
 		Name:             state.Name.ValueString(),
 	}
@@ -399,6 +416,11 @@ func (r *TeamResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		tflog.Error(ctx, "Error reading team resource response")
 	}
 
+	if teamResponse.StatusCode >= 400 {
+		resp.Diagnostics.AddError("Error updating team", fmt.Sprintf("status: %v, body: %v", teamResponse.Status, string(bodyResponse)))
+		return
+	}
+
 	tflog.Info(ctx, "Body Response", map[string]any{"success": string(bodyResponse)})
 
 	teamRequest, err = http.NewRequest(http.MethodGet, fmt.Sprintf("%s/api/v1/organization/%s/team/%s", r.endpoint, state.OrganizationId.ValueString(), state.ID.ValueString()), nil)
@@ -418,6 +440,17 @@ func (r *TeamResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	bodyResponse, err = io.ReadAll(teamResponse.Body)
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading team resource response body", fmt.Sprintf("Error reading team resource response body: %s", err))
+	}
+
+	if teamResponse.StatusCode == http.StatusNotFound {
+		tflog.Warn(ctx, "Team not found after update, removing from state", map[string]any{"id": state.ID.ValueString()})
+		resp.State.RemoveResource(ctx)
+		return
+	}
+
+	if teamResponse.StatusCode >= 400 {
+		resp.Diagnostics.AddError("Error reading team after update", fmt.Sprintf("status: %v, body: %v", teamResponse.Status, string(bodyResponse)))
+		return
 	}
 
 	tflog.Info(ctx, "Body Response", map[string]any{"bodyResponse": string(bodyResponse)})
@@ -442,7 +475,7 @@ func (r *TeamResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	plan.ManageCollection = types.BoolValue(team.ManageCollection)
 	plan.PlanJob = types.BoolValue(team.PlanJob)
 	plan.ApproveJob = types.BoolValue(team.ApproveJob)
-	plan.Role = types.StringPointerValue(team.Role)
+	plan.Role = roleToState(team.Role)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
@@ -469,6 +502,13 @@ func (r *TeamResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 		resp.Diagnostics.AddError("Error executing team resource request", fmt.Sprintf("Error executing team resource request: %s", err))
 		return
 	}
+}
+
+func roleToState(r *string) types.String {
+	if r == nil || *r == "" {
+		return types.StringNull()
+	}
+	return types.StringValue(*r)
 }
 
 func (r *TeamResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
