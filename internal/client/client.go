@@ -90,11 +90,14 @@ type WorkspaceVariableEntity struct {
 }
 
 type WorkspaceAccessEntity struct {
-	ID              string `jsonapi:"primary,access"`
-	ManageState     bool   `jsonapi:"attr,manageState"`
-	ManageWorkspace bool   `jsonapi:"attr,manageWorkspace"`
-	ManageJob       bool   `jsonapi:"attr,manageJob"`
-	Name            string `jsonapi:"attr,name"`
+	ID              string  `jsonapi:"primary,access"`
+	ManageState     bool    `jsonapi:"attr,manageState"`
+	ManageWorkspace bool    `jsonapi:"attr,manageWorkspace"`
+	ManageJob       bool    `jsonapi:"attr,manageJob"`
+	PlanJob         bool    `jsonapi:"attr,planJob"`
+	ApproveJob      bool    `jsonapi:"attr,approveJob"`
+	Role            *string `jsonapi:"attr,role"`
+	Name            string  `jsonapi:"attr,name"`
 }
 
 type OrganizationVariableEntity struct {

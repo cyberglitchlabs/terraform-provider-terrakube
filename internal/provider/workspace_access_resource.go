@@ -5,15 +5,17 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"io"
 	"net/http"
 	"strings"
 	"terraform-provider-terrakube/internal/client"
 
 	"github.com/google/jsonapi"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -40,6 +42,9 @@ type WorkspaceAccessResourceModel struct {
 	ManageState     types.Bool   `tfsdk:"manage_state"`
 	ManageWorkspace types.Bool   `tfsdk:"manage_workspace"`
 	ManageJob       types.Bool   `tfsdk:"manage_job"`
+	PlanJob         types.Bool   `tfsdk:"plan_job"`
+	ApproveJob      types.Bool   `tfsdk:"approve_job"`
+	Role            types.String `tfsdk:"role"`
 }
 
 func NewWorkspaceAccessResource() resource.Resource {
@@ -95,6 +100,24 @@ func (r *WorkspaceAccessResource) Schema(ctx context.Context, req resource.Schem
 				Computed:    true,
 				Default:     booldefault.StaticBool(false),
 			},
+			"plan_job": schema.BoolAttribute{
+				Optional:    true,
+				Description: "Allow queuing plans (RBAC v2). Inherits manage_job when not set.",
+				Computed:    true,
+			},
+			"approve_job": schema.BoolAttribute{
+				Optional:    true,
+				Description: "Allow approving/applying runs (RBAC v2). Inherits manage_job when not set.",
+				Computed:    true,
+			},
+			"role": schema.StringAttribute{
+				Optional:    true,
+				Computed:    true,
+				Description: "Predefined role: admin, write, plan, read, or custom. When set, overrides individual boolean flags.",
+				Validators: []validator.String{
+					stringvalidator.OneOf("admin", "write", "plan", "read", "custom"),
+				},
+			},
 		},
 	}
 }
@@ -141,11 +164,27 @@ func (r *WorkspaceAccessResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 
+	planJobVal := plan.ManageJob.ValueBool()
+	if !plan.PlanJob.IsNull() && !plan.PlanJob.IsUnknown() {
+		planJobVal = plan.PlanJob.ValueBool()
+	}
+	approveJobVal := plan.ManageJob.ValueBool()
+	if !plan.ApproveJob.IsNull() && !plan.ApproveJob.IsUnknown() {
+		approveJobVal = plan.ApproveJob.ValueBool()
+	}
+
 	bodyRequest := &client.WorkspaceAccessEntity{
 		ManageState:     plan.ManageState.ValueBool(),
 		ManageWorkspace: plan.ManageWorkspace.ValueBool(),
 		ManageJob:       plan.ManageJob.ValueBool(),
+		PlanJob:         planJobVal,
+		ApproveJob:      approveJobVal,
 		Name:            plan.Name.ValueString(),
+	}
+
+	if !plan.Role.IsNull() && !plan.Role.IsUnknown() {
+		role := plan.Role.ValueString()
+		bodyRequest.Role = &role
 	}
 
 	var out = new(bytes.Buffer)
@@ -174,6 +213,12 @@ func (r *WorkspaceAccessResource) Create(ctx context.Context, req resource.Creat
 	if err != nil {
 		tflog.Error(ctx, "Error reading workspace access resource response")
 	}
+
+	if workspaceAccessResponse.StatusCode >= 400 {
+		resp.Diagnostics.AddError("Error creating workspace access", fmt.Sprintf("status: %v, body: %v", workspaceAccessResponse.Status, string(bodyResponse)))
+		return
+	}
+
 	workspaceAccess := &client.WorkspaceAccessEntity{}
 
 	err = jsonapi.UnmarshalPayload(strings.NewReader(string(bodyResponse)), workspaceAccess)
@@ -187,6 +232,9 @@ func (r *WorkspaceAccessResource) Create(ctx context.Context, req resource.Creat
 	plan.ManageState = types.BoolValue(workspaceAccess.ManageState)
 	plan.ManageWorkspace = types.BoolValue(workspaceAccess.ManageWorkspace)
 	plan.ManageJob = types.BoolValue(workspaceAccess.ManageJob)
+	plan.PlanJob = types.BoolValue(workspaceAccess.PlanJob)
+	plan.ApproveJob = types.BoolValue(workspaceAccess.ApproveJob)
+	plan.Role = roleToState(workspaceAccess.Role)
 	plan.ID = types.StringValue(workspaceAccess.ID)
 
 	tflog.Info(ctx, "workspace access Created", map[string]any{"success": true})
@@ -228,7 +276,6 @@ func (r *WorkspaceAccessResource) Read(ctx context.Context, req resource.ReadReq
 	}
 	workspaceAccess := &client.WorkspaceAccessEntity{}
 
-	tflog.Info(ctx, "Body Response", map[string]any{"bodyResponse": string(bodyResponse)})
 	err = jsonapi.UnmarshalPayload(strings.NewReader(string(bodyResponse)), workspaceAccess)
 
 	tflog.Info(ctx, "Body Response", map[string]any{"bodyResponse": string(bodyResponse)})
@@ -240,6 +287,9 @@ func (r *WorkspaceAccessResource) Read(ctx context.Context, req resource.ReadReq
 	state.ManageState = types.BoolValue(workspaceAccess.ManageState)
 	state.ManageWorkspace = types.BoolValue(workspaceAccess.ManageWorkspace)
 	state.ManageJob = types.BoolValue(workspaceAccess.ManageJob)
+	state.PlanJob = types.BoolValue(workspaceAccess.PlanJob)
+	state.ApproveJob = types.BoolValue(workspaceAccess.ApproveJob)
+	state.Role = roleToState(workspaceAccess.Role)
 	state.Name = types.StringValue(workspaceAccess.Name)
 	state.ID = types.StringValue(workspaceAccess.ID)
 
@@ -263,12 +313,28 @@ func (r *WorkspaceAccessResource) Update(ctx context.Context, req resource.Updat
 		return
 	}
 
+	planJobVal := plan.ManageJob.ValueBool()
+	if !plan.PlanJob.IsNull() && !plan.PlanJob.IsUnknown() {
+		planJobVal = plan.PlanJob.ValueBool()
+	}
+	approveJobVal := plan.ManageJob.ValueBool()
+	if !plan.ApproveJob.IsNull() && !plan.ApproveJob.IsUnknown() {
+		approveJobVal = plan.ApproveJob.ValueBool()
+	}
+
 	bodyRequest := &client.WorkspaceAccessEntity{
 		ManageState:     plan.ManageState.ValueBool(),
 		ManageWorkspace: plan.ManageWorkspace.ValueBool(),
 		ManageJob:       plan.ManageJob.ValueBool(),
+		PlanJob:         planJobVal,
+		ApproveJob:      approveJobVal,
 		Name:            plan.Name.ValueString(),
 		ID:              state.ID.ValueString(),
+	}
+
+	if !plan.Role.IsNull() && !plan.Role.IsUnknown() {
+		role := plan.Role.ValueString()
+		bodyRequest.Role = &role
 	}
 
 	var out = new(bytes.Buffer)
@@ -298,6 +364,11 @@ func (r *WorkspaceAccessResource) Update(ctx context.Context, req resource.Updat
 		tflog.Error(ctx, "Error reading Workspace access resource response")
 	}
 
+	if workspaceAccessResponse.StatusCode >= 400 {
+		resp.Diagnostics.AddError("Error updating workspace access", fmt.Sprintf("status: %v, body: %v", workspaceAccessResponse.Status, string(bodyResponse)))
+		return
+	}
+
 	tflog.Info(ctx, "Body Response", map[string]any{"success": string(bodyResponse)})
 
 	workspaceAccessReq, err = http.NewRequest(http.MethodGet, fmt.Sprintf("%s/api/v1/organization/%s/workspace/%s/access/%s", r.endpoint, state.OrganizationId.ValueString(), state.WorkspaceId.ValueString(), state.ID.ValueString()), nil)
@@ -315,10 +386,22 @@ func (r *WorkspaceAccessResource) Update(ctx context.Context, req resource.Updat
 	}
 
 	bodyResponse, err = io.ReadAll(workspaceAccessResponse.Body)
-	tflog.Info(ctx, "Body Response", map[string]any{"bodyResponse": string(bodyResponse)})
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading Workspace access resource response body", fmt.Sprintf("Error reading Workspace access resource response body: %s", err))
 	}
+
+	if workspaceAccessResponse.StatusCode == http.StatusNotFound {
+		tflog.Warn(ctx, "Workspace access not found after update, removing from state", map[string]any{"id": state.ID.ValueString()})
+		resp.State.RemoveResource(ctx)
+		return
+	}
+
+	if workspaceAccessResponse.StatusCode >= 400 {
+		resp.Diagnostics.AddError("Error reading workspace access after update", fmt.Sprintf("status: %v, body: %v", workspaceAccessResponse.Status, string(bodyResponse)))
+		return
+	}
+
+	tflog.Info(ctx, "Body Response", map[string]any{"bodyResponse": string(bodyResponse)})
 
 	workspaceAccess := &client.WorkspaceAccessEntity{}
 	err = jsonapi.UnmarshalPayload(strings.NewReader(string(bodyResponse)), workspaceAccess)
@@ -329,10 +412,13 @@ func (r *WorkspaceAccessResource) Update(ctx context.Context, req resource.Updat
 	}
 
 	plan.ID = types.StringValue(state.ID.ValueString())
-	state.ManageState = types.BoolValue(workspaceAccess.ManageState)
-	state.ManageWorkspace = types.BoolValue(workspaceAccess.ManageWorkspace)
-	state.ManageJob = types.BoolValue(workspaceAccess.ManageJob)
-	state.Name = types.StringValue(workspaceAccess.Name)
+	plan.ManageState = types.BoolValue(workspaceAccess.ManageState)
+	plan.ManageWorkspace = types.BoolValue(workspaceAccess.ManageWorkspace)
+	plan.ManageJob = types.BoolValue(workspaceAccess.ManageJob)
+	plan.PlanJob = types.BoolValue(workspaceAccess.PlanJob)
+	plan.ApproveJob = types.BoolValue(workspaceAccess.ApproveJob)
+	plan.Role = roleToState(workspaceAccess.Role)
+	plan.Name = types.StringValue(workspaceAccess.Name)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
