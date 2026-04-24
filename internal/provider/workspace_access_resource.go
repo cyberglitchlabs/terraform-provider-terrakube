@@ -204,6 +204,7 @@ func (r *WorkspaceAccessResource) Create(ctx context.Context, req resource.Creat
 		resp.Diagnostics.AddError("Error executing workspace access resource request", fmt.Sprintf("Error executing workspace access resource request: %s", err))
 		return
 	}
+	defer workspaceAccessResponse.Body.Close()
 
 	bodyResponse, err := io.ReadAll(workspaceAccessResponse.Body)
 	if err != nil {
@@ -259,6 +260,7 @@ func (r *WorkspaceAccessResource) Read(ctx context.Context, req resource.ReadReq
 		resp.Diagnostics.AddError("Error executing workspace access resource request", fmt.Sprintf("Error executing workspace access resource request: %s", err))
 		return
 	}
+	defer workspaceAccessResponse.Body.Close()
 
 	if workspaceAccessResponse.StatusCode == http.StatusNotFound {
 		tflog.Warn(ctx, "Workspace access not found, removing from state", map[string]any{"id": state.ID.ValueString()})
@@ -353,6 +355,7 @@ func (r *WorkspaceAccessResource) Update(ctx context.Context, req resource.Updat
 	}
 
 	bodyResponse, err := io.ReadAll(workspaceAccessResponse.Body)
+	workspaceAccessResponse.Body.Close()
 	if err != nil {
 		tflog.Error(ctx, "Error reading Workspace access resource response")
 	}
@@ -377,6 +380,7 @@ func (r *WorkspaceAccessResource) Update(ctx context.Context, req resource.Updat
 		resp.Diagnostics.AddError("Error executing Workspace access resource request", fmt.Sprintf("Error executing Workspace access resource request: %s", err))
 		return
 	}
+	defer workspaceAccessResponse.Body.Close()
 
 	bodyResponse, err = io.ReadAll(workspaceAccessResponse.Body)
 	if err != nil {

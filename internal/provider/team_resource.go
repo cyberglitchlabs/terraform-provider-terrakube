@@ -239,6 +239,7 @@ func (r *TeamResource) Create(ctx context.Context, req resource.CreateRequest, r
 		resp.Diagnostics.AddError("Error executing team resource request", fmt.Sprintf("Error executing team resource request: %s", err))
 		return
 	}
+	defer teamResponse.Body.Close()
 
 	bodyResponse, err := io.ReadAll(teamResponse.Body)
 	if err != nil {
@@ -301,6 +302,7 @@ func (r *TeamResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 		resp.Diagnostics.AddError("Error executing team resource request", fmt.Sprintf("Error executing team resource request: %s", err))
 		return
 	}
+	defer teamResponse.Body.Close()
 
 	if teamResponse.StatusCode == http.StatusNotFound {
 		tflog.Warn(ctx, "Team not found, removing from state", map[string]any{"id": state.ID.ValueString()})
@@ -405,6 +407,7 @@ func (r *TeamResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	}
 
 	bodyResponse, err := io.ReadAll(teamResponse.Body)
+	teamResponse.Body.Close()
 	if err != nil {
 		tflog.Error(ctx, "Error reading team resource response")
 	}
@@ -429,6 +432,7 @@ func (r *TeamResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		resp.Diagnostics.AddError("Error executing team resource request", fmt.Sprintf("Error executing team resource request: %s", err))
 		return
 	}
+	defer teamResponse.Body.Close()
 
 	bodyResponse, err = io.ReadAll(teamResponse.Body)
 	if err != nil {
