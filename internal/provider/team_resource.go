@@ -13,6 +13,7 @@ import (
 	"github.com/google/jsonapi"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -137,13 +138,19 @@ func (r *TeamResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 			},
 			"plan_job": schema.BoolAttribute{
 				Optional:    true,
-				Description: "Allow queuing plans (RBAC v2). Inherits manage_job when not set.",
 				Computed:    true,
+				Description: "Allow queuing plans (RBAC v2). Inherits manage_job when not set.",
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"approve_job": schema.BoolAttribute{
 				Optional:    true,
-				Description: "Allow approving/applying runs (RBAC v2). Inherits manage_job when not set.",
 				Computed:    true,
+				Description: "Allow approving/applying runs (RBAC v2). Inherits manage_job when not set.",
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"role": schema.StringAttribute{
 				Optional:    true,
@@ -151,6 +158,9 @@ func (r *TeamResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 				Description: "Predefined role: admin, write, plan, read, or custom. When set, overrides individual boolean flags.",
 				Validators: []validator.String{
 					stringvalidator.OneOf("admin", "write", "plan", "read", "custom"),
+				},
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 		},
@@ -410,6 +420,12 @@ func (r *TeamResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	teamResponse.Body.Close()
 	if err != nil {
 		tflog.Error(ctx, "Error reading team resource response")
+	}
+
+	if teamResponse.StatusCode == http.StatusNotFound {
+		tflog.Warn(ctx, "Team not found during update, removing from state", map[string]any{"id": state.ID.ValueString()})
+		resp.State.RemoveResource(ctx)
+		return
 	}
 
 	if teamResponse.StatusCode >= 400 {

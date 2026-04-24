@@ -13,6 +13,7 @@ import (
 	"github.com/google/jsonapi"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -107,13 +108,19 @@ func (r *WorkspaceAccessResource) Schema(ctx context.Context, req resource.Schem
 			},
 			"plan_job": schema.BoolAttribute{
 				Optional:    true,
-				Description: "Allow queuing plans (RBAC v2). Inherits manage_job when not set.",
 				Computed:    true,
+				Description: "Allow queuing plans (RBAC v2). Inherits manage_job when not set.",
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"approve_job": schema.BoolAttribute{
 				Optional:    true,
-				Description: "Allow approving/applying runs (RBAC v2). Inherits manage_job when not set.",
 				Computed:    true,
+				Description: "Allow approving/applying runs (RBAC v2). Inherits manage_job when not set.",
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"role": schema.StringAttribute{
 				Optional:    true,
@@ -121,6 +128,9 @@ func (r *WorkspaceAccessResource) Schema(ctx context.Context, req resource.Schem
 				Description: "Predefined role: admin, write, plan, read, or custom. When set, overrides individual boolean flags.",
 				Validators: []validator.String{
 					stringvalidator.OneOf("admin", "write", "plan", "read", "custom"),
+				},
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 		},
@@ -358,6 +368,12 @@ func (r *WorkspaceAccessResource) Update(ctx context.Context, req resource.Updat
 	workspaceAccessResponse.Body.Close()
 	if err != nil {
 		tflog.Error(ctx, "Error reading Workspace access resource response")
+	}
+
+	if workspaceAccessResponse.StatusCode == http.StatusNotFound {
+		tflog.Warn(ctx, "Workspace access not found during update, removing from state", map[string]any{"id": state.ID.ValueString()})
+		resp.State.RemoveResource(ctx)
+		return
 	}
 
 	if workspaceAccessResponse.StatusCode >= 400 {
