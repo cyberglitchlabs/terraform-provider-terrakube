@@ -27,6 +27,7 @@ import (
 // Ensure provider defined types fully satisfy framework interfaces.
 var _ resource.Resource = &WorkspaceAccessResource{}
 var _ resource.ResourceWithImportState = &WorkspaceAccessResource{}
+var _ resource.ResourceWithConfigValidators = &WorkspaceAccessResource{}
 
 type WorkspaceAccessResource struct {
 	client   *http.Client
@@ -49,6 +50,10 @@ type WorkspaceAccessResourceModel struct {
 
 func NewWorkspaceAccessResource() resource.Resource {
 	return &WorkspaceAccessResource{}
+}
+
+func (r *WorkspaceAccessResource) ConfigValidators(_ context.Context) []resource.ConfigValidator {
+	return []resource.ConfigValidator{rbacRoleConflictValidator{}}
 }
 
 func (r *WorkspaceAccessResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -274,6 +279,12 @@ func (r *WorkspaceAccessResource) Read(ctx context.Context, req resource.ReadReq
 	if err != nil {
 		tflog.Error(ctx, "Error reading workspace access resource response")
 	}
+
+	if workspaceAccessResponse.StatusCode >= 400 {
+		resp.Diagnostics.AddError("Error reading workspace access", fmt.Sprintf("status: %v, body: %v", workspaceAccessResponse.Status, string(bodyResponse)))
+		return
+	}
+
 	workspaceAccess := &client.WorkspaceAccessEntity{}
 
 	err = jsonapi.UnmarshalPayload(strings.NewReader(string(bodyResponse)), workspaceAccess)

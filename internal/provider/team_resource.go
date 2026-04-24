@@ -27,6 +27,7 @@ import (
 // Ensure provider defined types fully satisfy framework interfaces.
 var _ resource.Resource = &TeamResource{}
 var _ resource.ResourceWithImportState = &TeamResource{}
+var _ resource.ResourceWithConfigValidators = &TeamResource{}
 
 type TeamResource struct {
 	client   *http.Client
@@ -53,6 +54,10 @@ type TeamResourceModel struct {
 
 func NewTeamResource() resource.Resource {
 	return &TeamResource{}
+}
+
+func (r *TeamResource) ConfigValidators(_ context.Context) []resource.ConfigValidator {
+	return []resource.ConfigValidator{rbacRoleConflictValidator{}}
 }
 
 func (r *TeamResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -316,6 +321,12 @@ func (r *TeamResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	if err != nil {
 		tflog.Error(ctx, "Error reading team resource response")
 	}
+
+	if teamResponse.StatusCode >= 400 {
+		resp.Diagnostics.AddError("Error reading team", fmt.Sprintf("status: %v, body: %v", teamResponse.Status, string(bodyResponse)))
+		return
+	}
+
 	team := &client.TeamEntity{}
 
 	err = jsonapi.UnmarshalPayload(strings.NewReader(string(bodyResponse)), team)

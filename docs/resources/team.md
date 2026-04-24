@@ -40,7 +40,7 @@ resource "terrakube_team" "team" {
 
 ### Optional
 
-- `approve_job` (Boolean) Allow approving/applying runs (RBAC v2). Defaults to false.
+- `approve_job` (Boolean) Allow approving/applying runs (RBAC v2). Inherits manage_job when not set. Only used when role is unset or "custom".
 - `manage_collection` (Boolean) Allow to manage variables collection
 - `manage_job` (Boolean) Allow to manage and trigger jobs
 - `manage_module` (Boolean) Allow to manage modules
@@ -49,8 +49,8 @@ resource "terrakube_team" "team" {
 - `manage_template` (Boolean) Allow to manage templates
 - `manage_vcs` (Boolean) Allow to manage vcs connections
 - `manage_workspace` (Boolean) Allow to manage workspaces
-- `plan_job` (Boolean) Allow queuing plans (RBAC v2). Defaults to false.
-- `role` (String) Predefined role: admin, write, plan, read, or custom. When set, overrides individual boolean flags.
+- `plan_job` (Boolean) Allow queuing plans (RBAC v2). Inherits manage_job when not set. Only used when role is unset or "custom".
+- `role` (String) Predefined role: admin (all), write (plan+apply+workspace+state), plan (plan only), read (read only), custom (use boolean flags). Leave unset to use boolean flags.
 
 ### Read-Only
 

@@ -1,5 +1,14 @@
 package provider
 
+import (
+	"context"
+	"fmt"
+
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+)
+
 type ErrorResponse struct {
 	Errors []struct {
 		Detail string `json:"detail"`
@@ -13,4 +22,36 @@ type AtomicOperationResponse struct {
 			ID   string `json:"id"`
 		} `json:"data"`
 	} `json:"atomic:results"`
+}
+
+// rbacRoleConflictValidator warns when plan_job or approve_job are explicitly
+// set alongside a non-custom role. For non-custom roles the server ignores
+// boolean flags, so setting them produces a confusing config.
+type rbacRoleConflictValidator struct{}
+
+func (v rbacRoleConflictValidator) Description(_ context.Context) string {
+	return "Warns when plan_job/approve_job are set alongside a non-custom role"
+}
+
+func (v rbacRoleConflictValidator) MarkdownDescription(ctx context.Context) string {
+	return v.Description(ctx)
+}
+
+func (v rbacRoleConflictValidator) ValidateResource(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var role types.String
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("role"), &role)...)
+	if resp.Diagnostics.HasError() || role.IsNull() || role.IsUnknown() || role.ValueString() == "custom" {
+		return
+	}
+
+	for _, attr := range []string{"plan_job", "approve_job"} {
+		var flag types.Bool
+		resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root(attr), &flag)...)
+		if !flag.IsNull() && !flag.IsUnknown() {
+			resp.Diagnostics.AddWarning(
+				"Redundant RBAC flag",
+				fmt.Sprintf("%s is set but role %q controls this permission — boolean flags are only used when role is \"custom\" or unset. Remove %s or set role = \"custom\".", attr, role.ValueString(), attr),
+			)
+		}
+	}
 }
