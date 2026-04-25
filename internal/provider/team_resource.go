@@ -96,7 +96,7 @@ func (r *TeamResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 			},
 			"manage_job": schema.BoolAttribute{
 				Optional:    true,
-				Description: "Allow to manage and trigger jobs. In RBAC v2 this is derived from plan_job/approve_job — set those fields directly.",
+				Description: "Allow to manage and trigger jobs. Legacy field — in RBAC v2, plan_job/approve_job inherit from this when unset.",
 				Computed:    true,
 				Default:     booldefault.StaticBool(false),
 			},
@@ -223,7 +223,7 @@ func (r *TeamResource) Create(ctx context.Context, req resource.CreateRequest, r
 		ApproveJob:       resolveJobFlag(plan.ApproveJob, plan.ManageJob),
 	}
 
-	if !plan.Role.IsUnknown() && !plan.Role.IsNull() {
+	if !plan.Role.IsNull() && !plan.Role.IsUnknown() {
 		role := plan.Role.ValueString()
 		bodyRequest.Role = &role
 	}

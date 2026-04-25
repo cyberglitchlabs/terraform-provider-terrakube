@@ -96,7 +96,7 @@ func (r *WorkspaceAccessResource) Schema(ctx context.Context, req resource.Schem
 			},
 			"manage_job": schema.BoolAttribute{
 				Optional:    true,
-				Description: "Allow to manage and trigger jobs. In RBAC v2 this is derived from plan_job/approve_job — set those fields directly.",
+				Description: "Allow to manage and trigger jobs. Legacy field — in RBAC v2, plan_job/approve_job inherit from this when unset.",
 				Computed:    true,
 				Default:     booldefault.StaticBool(false),
 			},
@@ -229,8 +229,6 @@ func (r *WorkspaceAccessResource) Create(ctx context.Context, req resource.Creat
 	workspaceAccess := &client.WorkspaceAccessEntity{}
 
 	err = jsonapi.UnmarshalPayload(strings.NewReader(string(bodyResponse)), workspaceAccess)
-
-	tflog.Info(ctx, "Body Response", map[string]any{"bodyResponse": string(bodyResponse)})
 	if err != nil {
 		resp.Diagnostics.AddError("Error unmarshal payload response", fmt.Sprintf("Error unmarshal payload response: %s", err))
 		return
@@ -291,8 +289,6 @@ func (r *WorkspaceAccessResource) Read(ctx context.Context, req resource.ReadReq
 	workspaceAccess := &client.WorkspaceAccessEntity{}
 
 	err = jsonapi.UnmarshalPayload(strings.NewReader(string(bodyResponse)), workspaceAccess)
-
-	tflog.Info(ctx, "Body Response", map[string]any{"bodyResponse": string(bodyResponse)})
 	if err != nil {
 		resp.Diagnostics.AddError("Error unmarshal payload response", fmt.Sprintf("Error unmarshal payload response: %s", err))
 		return
