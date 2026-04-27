@@ -37,3 +37,6 @@ website/vendor
 /examples/full/
 
 .vscode/
+
+# Provider binary
+terraform-provider-terrakube
