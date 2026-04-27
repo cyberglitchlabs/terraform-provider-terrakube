@@ -421,7 +421,9 @@ func (r *TeamResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	bodyResponse, err := io.ReadAll(teamResponse.Body)
 	teamResponse.Body.Close()
 	if err != nil {
-		tflog.Error(ctx, "Error reading team resource response")
+		resp.Diagnostics.AddError("Error reading team resource response body",
+			fmt.Sprintf("Error reading team resource response body: %s", err))
+		return
 	}
 
 	if teamResponse.StatusCode == http.StatusNotFound {
@@ -455,6 +457,7 @@ func (r *TeamResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	bodyResponse, err = io.ReadAll(teamResponse.Body)
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading team resource response body", fmt.Sprintf("Error reading team resource response body: %s", err))
+		return
 	}
 
 	if teamResponse.StatusCode == http.StatusNotFound {

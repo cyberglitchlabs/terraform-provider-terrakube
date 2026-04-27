@@ -365,7 +365,9 @@ func (r *WorkspaceAccessResource) Update(ctx context.Context, req resource.Updat
 	bodyResponse, err := io.ReadAll(workspaceAccessResponse.Body)
 	workspaceAccessResponse.Body.Close()
 	if err != nil {
-		tflog.Error(ctx, "Error reading Workspace access resource response")
+		resp.Diagnostics.AddError("Error reading Workspace access resource response body",
+			fmt.Sprintf("Error reading Workspace access resource response body: %s", err))
+		return
 	}
 
 	if workspaceAccessResponse.StatusCode == http.StatusNotFound {
@@ -399,6 +401,7 @@ func (r *WorkspaceAccessResource) Update(ctx context.Context, req resource.Updat
 	bodyResponse, err = io.ReadAll(workspaceAccessResponse.Body)
 	if err != nil {
 		resp.Diagnostics.AddError("Error reading Workspace access resource response body", fmt.Sprintf("Error reading Workspace access resource response body: %s", err))
+		return
 	}
 
 	if workspaceAccessResponse.StatusCode == http.StatusNotFound {
