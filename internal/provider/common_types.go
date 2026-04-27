@@ -42,13 +42,13 @@ func resolveJobFlag(explicit, inherit types.Bool) bool {
 	return inherit.ValueBool()
 }
 
-// rbacRoleConflictValidator warns when plan_job or approve_job are explicitly
-// set alongside a non-custom role. For non-custom roles the server ignores
-// boolean flags, so setting them produces a confusing config.
+// rbacRoleConflictValidator rejects configs where plan_job or approve_job are
+// explicitly set alongside a non-custom role. For non-custom roles the server
+// ignores boolean flags, so setting them produces a contradictory config.
 type rbacRoleConflictValidator struct{}
 
 func (v rbacRoleConflictValidator) Description(_ context.Context) string {
-	return "Warns when plan_job/approve_job are set alongside a non-custom role"
+	return "Rejects configs where plan_job/approve_job are set alongside a non-custom role"
 }
 
 func (v rbacRoleConflictValidator) MarkdownDescription(ctx context.Context) string {
@@ -66,8 +66,8 @@ func (v rbacRoleConflictValidator) ValidateResource(ctx context.Context, req res
 		var flag types.Bool
 		resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root(attr), &flag)...)
 		if !flag.IsNull() && !flag.IsUnknown() {
-			resp.Diagnostics.AddWarning(
-				"Redundant RBAC flag",
+			resp.Diagnostics.AddError(
+				"Conflicting RBAC configuration",
 				fmt.Sprintf("%s is set but role %q controls this permission — boolean flags are only used when role is \"custom\" or unset. Remove %s or set role = \"custom\".", attr, role.ValueString(), attr),
 			)
 		}

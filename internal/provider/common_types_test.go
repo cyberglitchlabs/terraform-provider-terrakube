@@ -1,9 +1,14 @@
 package provider
 
 import (
+	"context"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
 
 func strPtr(s string) *string { return &s }
@@ -73,9 +78,125 @@ func TestResolveJobFlag_UnknownExplicitInheritsTrue(t *testing.T) {
 	}
 }
 
+func TestResolveJobFlag_ExplicitTrueWithTrueInherit(t *testing.T) {
+	got := resolveJobFlag(types.BoolValue(true), types.BoolValue(true))
+	if !got {
+		t.Error("expected true: explicit true should return true regardless of inherit")
+	}
+}
+
 func TestResolveJobFlag_ExplicitFalseWithFalseInherit(t *testing.T) {
 	got := resolveJobFlag(types.BoolValue(false), types.BoolValue(false))
 	if got {
 		t.Error("expected false")
+	}
+}
+
+// --- rbacRoleConflictValidator ---
+
+// validatorTestSchema returns a minimal schema containing the three attributes
+// the validator inspects: role, plan_job, and approve_job.
+func validatorTestSchema() schema.Schema {
+	return schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			"role":        schema.StringAttribute{Optional: true},
+			"plan_job":    schema.BoolAttribute{Optional: true},
+			"approve_job": schema.BoolAttribute{Optional: true},
+		},
+	}
+}
+
+// validatorTestObjectType returns the tftypes.Object matching validatorTestSchema.
+func validatorTestObjectType() tftypes.Object {
+	return tftypes.Object{
+		AttributeTypes: map[string]tftypes.Type{
+			"role":        tftypes.String,
+			"plan_job":    tftypes.Bool,
+			"approve_job": tftypes.Bool,
+		},
+	}
+}
+
+func TestRbacRoleConflictValidator(t *testing.T) {
+	tests := map[string]struct {
+		values     map[string]tftypes.Value
+		wantErrors int
+	}{
+		"custom role with flags — no error": {
+			values: map[string]tftypes.Value{
+				"role":        tftypes.NewValue(tftypes.String, "custom"),
+				"plan_job":    tftypes.NewValue(tftypes.Bool, true),
+				"approve_job": tftypes.NewValue(tftypes.Bool, true),
+			},
+			wantErrors: 0,
+		},
+		"admin role with plan_job — error": {
+			values: map[string]tftypes.Value{
+				"role":        tftypes.NewValue(tftypes.String, "admin"),
+				"plan_job":    tftypes.NewValue(tftypes.Bool, true),
+				"approve_job": tftypes.NewValue(tftypes.Bool, nil),
+			},
+			wantErrors: 1,
+		},
+		"read role with both flags — two errors": {
+			values: map[string]tftypes.Value{
+				"role":        tftypes.NewValue(tftypes.String, "read"),
+				"plan_job":    tftypes.NewValue(tftypes.Bool, false),
+				"approve_job": tftypes.NewValue(tftypes.Bool, false),
+			},
+			wantErrors: 2,
+		},
+		"role unset with flags — no error": {
+			values: map[string]tftypes.Value{
+				"role":        tftypes.NewValue(tftypes.String, nil),
+				"plan_job":    tftypes.NewValue(tftypes.Bool, true),
+				"approve_job": tftypes.NewValue(tftypes.Bool, true),
+			},
+			wantErrors: 0,
+		},
+		"read role with no flags — no error": {
+			values: map[string]tftypes.Value{
+				"role":        tftypes.NewValue(tftypes.String, "read"),
+				"plan_job":    tftypes.NewValue(tftypes.Bool, nil),
+				"approve_job": tftypes.NewValue(tftypes.Bool, nil),
+			},
+			wantErrors: 0,
+		},
+		"write role with approve_job only — one error": {
+			values: map[string]tftypes.Value{
+				"role":        tftypes.NewValue(tftypes.String, "write"),
+				"plan_job":    tftypes.NewValue(tftypes.Bool, nil),
+				"approve_job": tftypes.NewValue(tftypes.Bool, true),
+			},
+			wantErrors: 1,
+		},
+		"all null — no error": {
+			values: map[string]tftypes.Value{
+				"role":        tftypes.NewValue(tftypes.String, nil),
+				"plan_job":    tftypes.NewValue(tftypes.Bool, nil),
+				"approve_job": tftypes.NewValue(tftypes.Bool, nil),
+			},
+			wantErrors: 0,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			s := validatorTestSchema()
+			req := resource.ValidateConfigRequest{
+				Config: tfsdk.Config{
+					Schema: s,
+					Raw:    tftypes.NewValue(validatorTestObjectType(), tc.values),
+				},
+			}
+			resp := &resource.ValidateConfigResponse{}
+
+			v := rbacRoleConflictValidator{}
+			v.ValidateResource(context.Background(), req, resp)
+
+			if got := resp.Diagnostics.ErrorsCount(); got != tc.wantErrors {
+				t.Errorf("expected %d errors, got %d; diagnostics: %v", tc.wantErrors, got, resp.Diagnostics)
+			}
+		})
 	}
 }

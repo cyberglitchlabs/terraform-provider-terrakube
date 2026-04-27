@@ -67,7 +67,7 @@ func (r *TeamResource) Metadata(ctx context.Context, req resource.MetadataReques
 
 func (r *TeamResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Create a team and bind it to an organization. Allows for fined grained access management.",
+		MarkdownDescription: "Create a team and bind it to an organization. Allows for fine-grained access management.",
 
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
@@ -139,7 +139,7 @@ func (r *TeamResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 			"plan_job": schema.BoolAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Allow queuing plans (RBAC v2). Inherits manage_job when not set.",
+				Description: "Allow queuing plans (RBAC v2). Inherits manage_job when not set. Only used when role is unset or \"custom\". Note: inheritance only applies on create/update — imported resources retain the remote value.",
 				PlanModifiers: []planmodifier.Bool{
 					boolplanmodifier.UseStateForUnknown(),
 				},
@@ -147,7 +147,7 @@ func (r *TeamResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 			"approve_job": schema.BoolAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Allow approving/applying runs (RBAC v2). Inherits manage_job when not set.",
+				Description: "Allow approving/applying runs (RBAC v2). Inherits manage_job when not set. Only used when role is unset or \"custom\". Note: inheritance only applies on create/update — imported resources retain the remote value.",
 				PlanModifiers: []planmodifier.Bool{
 					boolplanmodifier.UseStateForUnknown(),
 				},
@@ -155,7 +155,7 @@ func (r *TeamResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 			"role": schema.StringAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Predefined role: admin, write, plan, read, or custom. When set, overrides individual boolean flags.",
+				Description: "Predefined role: admin (all permissions), write (plan+apply+workspace+state), plan (plan only), read (read only), or custom (use boolean flags). When set to a non-custom value, overrides individual boolean flags. Leave unset to use boolean flags.",
 				Validators: []validator.String{
 					stringvalidator.OneOf("admin", "write", "plan", "read", "custom"),
 				},
@@ -237,12 +237,12 @@ func (r *TeamResource) Create(ctx context.Context, req resource.CreateRequest, r
 	}
 
 	teamRequest, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/api/v1/organization/%s/team", r.endpoint, plan.OrganizationId.ValueString()), strings.NewReader(out.String()))
-	teamRequest.Header.Add("Authorization", fmt.Sprintf("Bearer %s", r.token))
-	teamRequest.Header.Add("Content-Type", "application/vnd.api+json")
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating team resource request", fmt.Sprintf("Error creating team resource request: %s", err))
 		return
 	}
+	teamRequest.Header.Add("Authorization", fmt.Sprintf("Bearer %s", r.token))
+	teamRequest.Header.Add("Content-Type", "application/vnd.api+json")
 
 	teamResponse, err := r.client.Do(teamRequest)
 	if err != nil {
@@ -253,10 +253,11 @@ func (r *TeamResource) Create(ctx context.Context, req resource.CreateRequest, r
 
 	bodyResponse, err := io.ReadAll(teamResponse.Body)
 	if err != nil {
-		tflog.Error(ctx, "Error reading team resource response")
+		resp.Diagnostics.AddError("Error reading team resource response body", fmt.Sprintf("Error reading team resource response body: %s", err))
+		return
 	}
 
-	if teamResponse.StatusCode >= 400 {
+	if teamResponse.StatusCode >= http.StatusBadRequest {
 		resp.Diagnostics.AddError("Error creating team", fmt.Sprintf("status: %v, body: %v", teamResponse.Status, string(bodyResponse)))
 		return
 	}
@@ -300,12 +301,12 @@ func (r *TeamResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	}
 
 	teamRequest, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/api/v1/organization/%s/team/%s", r.endpoint, state.OrganizationId.ValueString(), state.ID.ValueString()), nil)
-	teamRequest.Header.Add("Authorization", fmt.Sprintf("Bearer %s", r.token))
-	teamRequest.Header.Add("Content-Type", "application/vnd.api+json")
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating team resource request", fmt.Sprintf("Error creating team resource request: %s", err))
 		return
 	}
+	teamRequest.Header.Add("Authorization", fmt.Sprintf("Bearer %s", r.token))
+	teamRequest.Header.Add("Content-Type", "application/vnd.api+json")
 
 	teamResponse, err := r.client.Do(teamRequest)
 	if err != nil {
@@ -322,10 +323,11 @@ func (r *TeamResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 
 	bodyResponse, err := io.ReadAll(teamResponse.Body)
 	if err != nil {
-		tflog.Error(ctx, "Error reading team resource response")
+		resp.Diagnostics.AddError("Error reading team resource response body", fmt.Sprintf("Error reading team resource response body: %s", err))
+		return
 	}
 
-	if teamResponse.StatusCode >= 400 {
+	if teamResponse.StatusCode >= http.StatusBadRequest {
 		resp.Diagnostics.AddError("Error reading team", fmt.Sprintf("status: %v, body: %v", teamResponse.Status, string(bodyResponse)))
 		return
 	}
@@ -403,12 +405,12 @@ func (r *TeamResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	}
 
 	teamRequest, err := http.NewRequest(http.MethodPatch, fmt.Sprintf("%s/api/v1/organization/%s/team/%s", r.endpoint, state.OrganizationId.ValueString(), state.ID.ValueString()), strings.NewReader(out.String()))
-	teamRequest.Header.Add("Authorization", fmt.Sprintf("Bearer %s", r.token))
-	teamRequest.Header.Add("Content-Type", "application/vnd.api+json")
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating team resource request", fmt.Sprintf("Error creating team resource request: %s", err))
 		return
 	}
+	teamRequest.Header.Add("Authorization", fmt.Sprintf("Bearer %s", r.token))
+	teamRequest.Header.Add("Content-Type", "application/vnd.api+json")
 
 	teamResponse, err := r.client.Do(teamRequest)
 	if err != nil {
@@ -428,7 +430,7 @@ func (r *TeamResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		return
 	}
 
-	if teamResponse.StatusCode >= 400 {
+	if teamResponse.StatusCode >= http.StatusBadRequest {
 		resp.Diagnostics.AddError("Error updating team", fmt.Sprintf("status: %v, body: %v", teamResponse.Status, string(bodyResponse)))
 		return
 	}
@@ -436,12 +438,12 @@ func (r *TeamResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	tflog.Info(ctx, "Body Response", map[string]any{"success": string(bodyResponse)})
 
 	teamRequest, err = http.NewRequest(http.MethodGet, fmt.Sprintf("%s/api/v1/organization/%s/team/%s", r.endpoint, state.OrganizationId.ValueString(), state.ID.ValueString()), nil)
-	teamRequest.Header.Add("Authorization", fmt.Sprintf("Bearer %s", r.token))
-	teamRequest.Header.Add("Content-Type", "application/vnd.api+json")
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating team resource request", fmt.Sprintf("Error creating team resource request: %s", err))
 		return
 	}
+	teamRequest.Header.Add("Authorization", fmt.Sprintf("Bearer %s", r.token))
+	teamRequest.Header.Add("Content-Type", "application/vnd.api+json")
 
 	teamResponse, err = r.client.Do(teamRequest)
 	if err != nil {
@@ -461,7 +463,7 @@ func (r *TeamResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		return
 	}
 
-	if teamResponse.StatusCode >= 400 {
+	if teamResponse.StatusCode >= http.StatusBadRequest {
 		resp.Diagnostics.AddError("Error reading team after update", fmt.Sprintf("status: %v, body: %v", teamResponse.Status, string(bodyResponse)))
 		return
 	}
@@ -504,17 +506,18 @@ func (r *TeamResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 	}
 
 	reqOrg, err := http.NewRequest(http.MethodDelete, fmt.Sprintf("%s/api/v1/organization/%s/team/%s", r.endpoint, data.OrganizationId.ValueString(), data.ID.ValueString()), nil)
-	reqOrg.Header.Add("Authorization", fmt.Sprintf("Bearer %s", r.token))
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating team resource request", fmt.Sprintf("Error creating team resource request: %s", err))
 		return
 	}
+	reqOrg.Header.Add("Authorization", fmt.Sprintf("Bearer %s", r.token))
 
-	_, err = r.client.Do(reqOrg)
+	delResp, err := r.client.Do(reqOrg)
 	if err != nil {
 		resp.Diagnostics.AddError("Error executing team resource request", fmt.Sprintf("Error executing team resource request: %s", err))
 		return
 	}
+	defer delResp.Body.Close()
 }
 
 func (r *TeamResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

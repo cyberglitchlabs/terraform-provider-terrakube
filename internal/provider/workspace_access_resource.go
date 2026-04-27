@@ -109,7 +109,7 @@ func (r *WorkspaceAccessResource) Schema(ctx context.Context, req resource.Schem
 			"plan_job": schema.BoolAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Allow queuing plans (RBAC v2). Inherits manage_job when not set.",
+				Description: "Allow queuing plans (RBAC v2). Inherits manage_job when not set. Only used when role is unset or \"custom\". Note: inheritance only applies on create/update — imported resources retain the remote value.",
 				PlanModifiers: []planmodifier.Bool{
 					boolplanmodifier.UseStateForUnknown(),
 				},
@@ -117,7 +117,7 @@ func (r *WorkspaceAccessResource) Schema(ctx context.Context, req resource.Schem
 			"approve_job": schema.BoolAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Allow approving/applying runs (RBAC v2). Inherits manage_job when not set.",
+				Description: "Allow approving/applying runs (RBAC v2). Inherits manage_job when not set. Only used when role is unset or \"custom\". Note: inheritance only applies on create/update — imported resources retain the remote value.",
 				PlanModifiers: []planmodifier.Bool{
 					boolplanmodifier.UseStateForUnknown(),
 				},
@@ -125,7 +125,7 @@ func (r *WorkspaceAccessResource) Schema(ctx context.Context, req resource.Schem
 			"role": schema.StringAttribute{
 				Optional:    true,
 				Computed:    true,
-				Description: "Predefined role: admin, write, plan, read, or custom. When set, overrides individual boolean flags.",
+				Description: "Predefined role: admin (all permissions), write (plan+apply+workspace+state), plan (plan only), read (read only), or custom (use boolean flags). When set to a non-custom value, overrides individual boolean flags. Leave unset to use boolean flags.",
 				Validators: []validator.String{
 					stringvalidator.OneOf("admin", "write", "plan", "read", "custom"),
 				},
@@ -202,12 +202,12 @@ func (r *WorkspaceAccessResource) Create(ctx context.Context, req resource.Creat
 	}
 
 	workspaceAccessRequest, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/api/v1/organization/%s/workspace/%s/access", r.endpoint, plan.OrganizationId.ValueString(), plan.WorkspaceId.ValueString()), strings.NewReader(out.String()))
-	workspaceAccessRequest.Header.Add("Authorization", fmt.Sprintf("Bearer %s", r.token))
-	workspaceAccessRequest.Header.Add("Content-Type", "application/vnd.api+json")
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating workspace access resource request", fmt.Sprintf("Error creating workspace access resource request: %s", err))
 		return
 	}
+	workspaceAccessRequest.Header.Add("Authorization", fmt.Sprintf("Bearer %s", r.token))
+	workspaceAccessRequest.Header.Add("Content-Type", "application/vnd.api+json")
 
 	workspaceAccessResponse, err := r.client.Do(workspaceAccessRequest)
 	if err != nil {
@@ -218,10 +218,11 @@ func (r *WorkspaceAccessResource) Create(ctx context.Context, req resource.Creat
 
 	bodyResponse, err := io.ReadAll(workspaceAccessResponse.Body)
 	if err != nil {
-		tflog.Error(ctx, "Error reading workspace access resource response")
+		resp.Diagnostics.AddError("Error reading workspace access resource response body", fmt.Sprintf("Error reading workspace access resource response body: %s", err))
+		return
 	}
 
-	if workspaceAccessResponse.StatusCode >= 400 {
+	if workspaceAccessResponse.StatusCode >= http.StatusBadRequest {
 		resp.Diagnostics.AddError("Error creating workspace access", fmt.Sprintf("status: %v, body: %v", workspaceAccessResponse.Status, string(bodyResponse)))
 		return
 	}
@@ -256,12 +257,12 @@ func (r *WorkspaceAccessResource) Read(ctx context.Context, req resource.ReadReq
 	}
 
 	workspaceAccessRequest, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/api/v1/organization/%s/workspace/%s/access/%s", r.endpoint, state.OrganizationId.ValueString(), state.WorkspaceId.ValueString(), state.ID.ValueString()), nil)
-	workspaceAccessRequest.Header.Add("Authorization", fmt.Sprintf("Bearer %s", r.token))
-	workspaceAccessRequest.Header.Add("Content-Type", "application/vnd.api+json")
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating workspace access resource request", fmt.Sprintf("Error creating workspace access resource request: %s", err))
 		return
 	}
+	workspaceAccessRequest.Header.Add("Authorization", fmt.Sprintf("Bearer %s", r.token))
+	workspaceAccessRequest.Header.Add("Content-Type", "application/vnd.api+json")
 
 	workspaceAccessResponse, err := r.client.Do(workspaceAccessRequest)
 	if err != nil {
@@ -278,10 +279,11 @@ func (r *WorkspaceAccessResource) Read(ctx context.Context, req resource.ReadReq
 
 	bodyResponse, err := io.ReadAll(workspaceAccessResponse.Body)
 	if err != nil {
-		tflog.Error(ctx, "Error reading workspace access resource response")
+		resp.Diagnostics.AddError("Error reading workspace access resource response body", fmt.Sprintf("Error reading workspace access resource response body: %s", err))
+		return
 	}
 
-	if workspaceAccessResponse.StatusCode >= 400 {
+	if workspaceAccessResponse.StatusCode >= http.StatusBadRequest {
 		resp.Diagnostics.AddError("Error reading workspace access", fmt.Sprintf("status: %v, body: %v", workspaceAccessResponse.Status, string(bodyResponse)))
 		return
 	}
@@ -347,12 +349,12 @@ func (r *WorkspaceAccessResource) Update(ctx context.Context, req resource.Updat
 	}
 
 	workspaceAccessReq, err := http.NewRequest(http.MethodPatch, fmt.Sprintf("%s/api/v1/organization/%s/workspace/%s/access/%s", r.endpoint, state.OrganizationId.ValueString(), state.WorkspaceId.ValueString(), state.ID.ValueString()), strings.NewReader(out.String()))
-	workspaceAccessReq.Header.Add("Authorization", fmt.Sprintf("Bearer %s", r.token))
-	workspaceAccessReq.Header.Add("Content-Type", "application/vnd.api+json")
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating Workspace access resource request", fmt.Sprintf("Error creating Workspace access resource request: %s", err))
 		return
 	}
+	workspaceAccessReq.Header.Add("Authorization", fmt.Sprintf("Bearer %s", r.token))
+	workspaceAccessReq.Header.Add("Content-Type", "application/vnd.api+json")
 
 	workspaceAccessResponse, err := r.client.Do(workspaceAccessReq)
 	if err != nil {
@@ -372,7 +374,7 @@ func (r *WorkspaceAccessResource) Update(ctx context.Context, req resource.Updat
 		return
 	}
 
-	if workspaceAccessResponse.StatusCode >= 400 {
+	if workspaceAccessResponse.StatusCode >= http.StatusBadRequest {
 		resp.Diagnostics.AddError("Error updating workspace access", fmt.Sprintf("status: %v, body: %v", workspaceAccessResponse.Status, string(bodyResponse)))
 		return
 	}
@@ -380,12 +382,12 @@ func (r *WorkspaceAccessResource) Update(ctx context.Context, req resource.Updat
 	tflog.Info(ctx, "Body Response", map[string]any{"success": string(bodyResponse)})
 
 	workspaceAccessReq, err = http.NewRequest(http.MethodGet, fmt.Sprintf("%s/api/v1/organization/%s/workspace/%s/access/%s", r.endpoint, state.OrganizationId.ValueString(), state.WorkspaceId.ValueString(), state.ID.ValueString()), nil)
-	workspaceAccessReq.Header.Add("Authorization", fmt.Sprintf("Bearer %s", r.token))
-	workspaceAccessReq.Header.Add("Content-Type", "application/vnd.api+json")
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating Workspace access resource request", fmt.Sprintf("Error creating Workspace access resource request: %s", err))
 		return
 	}
+	workspaceAccessReq.Header.Add("Authorization", fmt.Sprintf("Bearer %s", r.token))
+	workspaceAccessReq.Header.Add("Content-Type", "application/vnd.api+json")
 
 	workspaceAccessResponse, err = r.client.Do(workspaceAccessReq)
 	if err != nil {
@@ -405,7 +407,7 @@ func (r *WorkspaceAccessResource) Update(ctx context.Context, req resource.Updat
 		return
 	}
 
-	if workspaceAccessResponse.StatusCode >= 400 {
+	if workspaceAccessResponse.StatusCode >= http.StatusBadRequest {
 		resp.Diagnostics.AddError("Error reading workspace access after update", fmt.Sprintf("status: %v, body: %v", workspaceAccessResponse.Status, string(bodyResponse)))
 		return
 	}
@@ -443,17 +445,18 @@ func (r *WorkspaceAccessResource) Delete(ctx context.Context, req resource.Delet
 	}
 
 	workspaceRequest, err := http.NewRequest(http.MethodDelete, fmt.Sprintf("%s/api/v1/organization/%s/workspace/%s/access/%s", r.endpoint, data.OrganizationId.ValueString(), data.WorkspaceId.ValueString(), data.ID.ValueString()), nil)
-	workspaceRequest.Header.Add("Authorization", fmt.Sprintf("Bearer %s", r.token))
 	if err != nil {
 		resp.Diagnostics.AddError("Error creating Workspace access resource request", fmt.Sprintf("Error creating Workspace access resource request: %s", err))
 		return
 	}
+	workspaceRequest.Header.Add("Authorization", fmt.Sprintf("Bearer %s", r.token))
 
-	_, err = r.client.Do(workspaceRequest)
+	delResp, err := r.client.Do(workspaceRequest)
 	if err != nil {
 		resp.Diagnostics.AddError("Error executing Workspace access resource request", fmt.Sprintf("Error executing Workspace access resource request: %s", err))
 		return
 	}
+	defer delResp.Body.Close()
 }
 
 func (r *WorkspaceAccessResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
@@ -462,7 +465,7 @@ func (r *WorkspaceAccessResource) ImportState(ctx context.Context, req resource.
 	if len(idParts) != 3 || idParts[0] == "" || idParts[1] == "" || idParts[2] == "" {
 		resp.Diagnostics.AddError(
 			"Unexpected Import Identifier",
-			fmt.Sprintf("Expected import identifier with format: 'organization_ID,workspace_ID, ID', Got: %q", req.ID),
+			fmt.Sprintf("Expected import identifier with format: 'organization_ID,workspace_ID,ID', Got: %q", req.ID),
 		)
 		return
 	}
